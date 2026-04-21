@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Производственная система - Реальное время</title>
-    <script src="/socket.io/socket.io.js"></script>
+    <title>Система управления производством</title>
     <style>
         * {
             box-sizing: border-box;
@@ -20,7 +19,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -30,7 +29,7 @@
         }
 
         .main-page h1 {
-            font-size: 2.5rem;
+            font-size: 2rem;
             margin-bottom: 40px;
             color: #2c3e50;
         }
@@ -40,10 +39,9 @@
             color: white;
             border: none;
             padding: 12px 30px;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             cursor: pointer;
             border-radius: 6px;
-            transition: background 0.2s;
         }
 
         .btn-primary:hover {
@@ -60,32 +58,12 @@
             margin: 5px;
         }
 
-        .btn-secondary:hover {
-            background-color: #5d6d6e;
-        }
-
         .btn-danger {
             background-color: #c0392b;
         }
 
-        .btn-danger:hover {
-            background-color: #a93226;
-        }
-
         .btn-success {
             background-color: #27ae60;
-        }
-
-        .btn-success:hover {
-            background-color: #1e8449;
-        }
-
-        .btn-info {
-            background-color: #3498db;
-        }
-
-        .btn-info:hover {
-            background-color: #2980b9;
         }
 
         .modal {
@@ -105,11 +83,10 @@
             background: white;
             padding: 30px;
             border-radius: 8px;
-            width: 600px;
+            width: 500px;
             max-width: 90%;
             max-height: 80vh;
             overflow-y: auto;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         }
 
         .modal-content input, .modal-content textarea, .modal-content select {
@@ -118,12 +95,6 @@
             margin: 10px 0;
             border: 1px solid #ccc;
             border-radius: 4px;
-            font-family: inherit;
-        }
-
-        .modal-content textarea {
-            min-height: 80px;
-            resize: vertical;
         }
 
         .productions-list {
@@ -163,7 +134,7 @@
         }
 
         .section-title {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             margin-bottom: 15px;
             color: #2c3e50;
         }
@@ -181,6 +152,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .back-link {
@@ -192,28 +164,9 @@
             cursor: pointer;
         }
 
-        .back-link:hover {
-            text-decoration: underline;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 50px;
-            font-size: 1.2rem;
-            color: #7f8c8d;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            background: #ecf0f1;
-        }
-
         .templates-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 15px;
             margin: 20px 0;
         }
@@ -236,59 +189,141 @@
             background: #e8f8f0;
         }
 
-        .realtime-indicator {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #27ae60;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 999;
-        }
-
         .part-item, .task-item {
             display: flex;
             gap: 10px;
             margin-bottom: 10px;
-            align-items: center;
+            flex-wrap: wrap;
         }
 
         .part-item input, .task-item input, .task-item select {
             flex: 1;
             margin: 0;
         }
+
+        .export-import {
+            margin-top: 30px;
+            padding: 20px;
+            background: #ecf0f1;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            background: #ecf0f1;
+        }
     </style>
 </head>
 <body>
 <div class="container" id="app">
-    <div class="loading">Загрузка...</div>
+    <div class="main-page">
+        <h1>Система управления производством</h1>
+        <div id="dynamicContent"></div>
+    </div>
 </div>
-<div class="realtime-indicator" id="realtimeIndicator">● Синхронизация в реальном времени</div>
 
 <script>
-    const API_BASE = window.location.origin + '/api';
-    let socket = io();
+    // Ключ для localStorage
+    const STORAGE_KEY = 'productions_data_v2';
+    
+    // Шаблоны участков
+    const SITE_TEMPLATES = [
+        {
+            id: 'mechanical',
+            name: 'Механическая обработка',
+            type: 'механический',
+            defaultParts: [
+                { name: 'Корпусная деталь', description: 'Изготовление корпусных деталей' },
+                { name: 'Вал', description: 'Изготовление валов' }
+            ],
+            defaultTasks: [
+                { title: 'Настройка оборудования', description: 'Проверить станки', status: 'Ожидает' },
+                { title: 'Контроль качества', description: 'Проверить образцы', status: 'Ожидает' }
+            ]
+        },
+        {
+            id: 'welding',
+            name: 'Сварочный участок',
+            type: 'сварочный',
+            defaultParts: [
+                { name: 'Сварная рама', description: 'Сварка металлической рамы' },
+                { name: 'Кронштейн', description: 'Изготовление кронштейнов' }
+            ],
+            defaultTasks: [
+                { title: 'Подготовка металла', description: 'Очистка кромок', status: 'Ожидает' },
+                { title: 'Сварка', description: 'Выполнить сварку', status: 'Ожидает' }
+            ]
+        },
+        {
+            id: 'assembly',
+            name: 'Сборочный цех',
+            type: 'сборочный',
+            defaultParts: [
+                { name: 'Узел крепления', description: 'Сборка крепежного узла' },
+                { name: 'Механизм передачи', description: 'Сборка редуктора' }
+            ],
+            defaultTasks: [
+                { title: 'Комплектация', description: 'Проверить детали', status: 'Ожидает' },
+                { title: 'Сборка', description: 'Собрать узлы', status: 'Ожидает' },
+                { title: 'Испытания', description: 'Провести тесты', status: 'Ожидает' }
+            ]
+        },
+        {
+            id: 'painting',
+            name: 'Окрасочный участок',
+            type: 'окрасочный',
+            defaultParts: [
+                { name: 'Заготовка под покраску', description: 'Подготовленная деталь' }
+            ],
+            defaultTasks: [
+                { title: 'Очистка', description: 'Удалить загрязнения', status: 'Ожидает' },
+                { title: 'Грунтовка', description: 'Нанести грунт', status: 'Ожидает' },
+                { title: 'Окраска', description: 'Нанести покрытие', status: 'Ожидает' }
+            ]
+        },
+        {
+            id: 'empty',
+            name: 'Пустой шаблон',
+            type: 'пользовательский',
+            defaultParts: [],
+            defaultTasks: []
+        }
+    ];
+    
     let productions = [];
-    let templates = [];
     let currentProductionId = null;
     
-    // Подписка на обновления в реальном времени
-    socket.on('data-updated', (updatedData) => {
-        productions = updatedData;
-        // Обновляем текущее отображение в зависимости от страницы
-        if (window.location.hash === '#main' || !currentProductionId) {
-            renderMainPage();
-        } else {
-            const prod = productions.find(p => p.id === currentProductionId);
-            if (prod) {
-                renderSitesPage(currentProductionId);
-            } else {
-                renderMainPage();
+    // Загрузка данных
+    function loadData() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                productions = JSON.parse(saved);
+            } catch(e) {
+                productions = [];
             }
         }
-    });
+        if (productions.length === 0) {
+            productions = [];
+        }
+        renderMainPage();
+    }
+    
+    // Сохранение
+    function saveData() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(productions));
+    }
+    
+    function generateId() {
+        return Date.now() + '-' + Math.random().toString(36).substr(2, 8);
+    }
     
     function escapeHtml(str) {
         if (!str) return '';
@@ -300,104 +335,44 @@
         });
     }
     
-    async function apiRequest(url, method = 'GET', body = null) {
-        const options = { method, headers: { 'Content-Type': 'application/json' } };
-        if (body) options.body = JSON.stringify(body);
-        const response = await fetch(API_BASE + url, options);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Ошибка');
-        }
-        return response.json();
-    }
-    
-    async function loadProductions() {
-        productions = await apiRequest('/productions');
-    }
-    
-    async function loadTemplates() {
-        templates = await apiRequest('/templates');
-    }
-    
-    async function init() {
-        await Promise.all([loadProductions(), loadTemplates()]);
-        renderMainPage();
-    }
-    
-    async function createProduction(data) {
-        const newProd = await apiRequest('/productions', 'POST', data);
-        // Данные обновятся через сокет
-    }
-    
-    async function updateProduction(id, data) {
-        await apiRequest(`/productions/${id}`, 'PUT', data);
-    }
-    
-    async function deleteProduction(id) {
-        await apiRequest(`/productions/${id}`, 'DELETE');
-    }
-    
-    async function createSiteFromTemplate(prodId, templateId, customName, customParts, customTasks) {
-        await apiRequest(`/productions/${prodId}/sites/from-template`, 'POST', {
-            templateId,
-            customName,
-            customParts,
-            customTasks
-        });
-    }
-    
-    async function updateSite(prodId, siteId, data) {
-        await apiRequest(`/productions/${prodId}/sites/${siteId}`, 'PUT', data);
-    }
-    
-    async function deleteSite(prodId, siteId) {
-        await apiRequest(`/productions/${prodId}/sites/${siteId}`, 'DELETE');
-    }
-    
-    async function updatePart(prodId, siteId, partId, data) {
-        await apiRequest(`/productions/${prodId}/sites/${siteId}/parts/${partId}`, 'PUT', data);
-    }
-    
-    async function deletePart(prodId, siteId, partId) {
-        await apiRequest(`/productions/${prodId}/sites/${siteId}/parts/${partId}`, 'DELETE');
-    }
-    
-    async function updateTask(prodId, siteId, taskId, data) {
-        await apiRequest(`/productions/${prodId}/sites/${siteId}/tasks/${taskId}`, 'PUT', data);
-    }
-    
-    async function deleteTask(prodId, siteId, taskId) {
-        await apiRequest(`/productions/${prodId}/sites/${siteId}/tasks/${taskId}`, 'DELETE');
-    }
-    
     function renderMainPage() {
-        window.location.hash = '#main';
         currentProductionId = null;
-        const app = document.getElementById('app');
-        app.innerHTML = `
-            <div class="main-page">
-                <h1>Система управления производством</h1>
-                <button class="btn-primary" id="createProductionBtn">Создать производство</button>
-                
-                <div class="productions-list">
-                    ${productions.length === 0 ? '<p>Нет созданных производств. Нажмите "Создать производство".</p>' : ''}
-                    ${productions.map(prod => `
-                        <div class="production-card">
-                            <h3>${escapeHtml(prod.name)}</h3>
-                            <p><strong>Деятельность:</strong> ${escapeHtml(prod.activity)}</p>
-                            <p><strong>Участков:</strong> ${prod.sites.length}</p>
-                            <div class="production-actions">
-                                <button class="btn-secondary open-site-btn" data-id="${prod.id}">Открыть участки</button>
-                                <button class="btn-secondary edit-production-btn" data-id="${prod.id}">Редактировать</button>
-                                <button class="btn-secondary btn-danger delete-production-btn" data-id="${prod.id}">Удалить</button>
-                            </div>
+        const container = document.getElementById('dynamicContent');
+        container.innerHTML = `
+            <button class="btn-primary" id="createProductionBtn">Создать производство</button>
+            
+            <div class="export-import">
+                <button class="btn-secondary" id="exportDataBtn">Экспорт данных (JSON)</button>
+                <label class="btn-secondary" style="display:inline-block; cursor:pointer;">
+                    Импорт данных
+                    <input type="file" id="importFileInput" accept=".json" style="display:none;">
+                </label>
+                <button class="btn-secondary btn-danger" id="clearDataBtn">Очистить все данные</button>
+            </div>
+            
+            <div class="productions-list" id="productionsList">
+                ${productions.length === 0 ? '<p>Нет созданных производств. Нажмите "Создать производство".</p>' : ''}
+                ${productions.map(prod => `
+                    <div class="production-card">
+                        <h3>${escapeHtml(prod.name)}</h3>
+                        <p><strong>Деятельность:</strong> ${escapeHtml(prod.activity)}</p>
+                        <p><strong>Участков:</strong> ${prod.sites.length}</p>
+                        <div class="production-actions">
+                            <button class="btn-secondary open-site-btn" data-id="${prod.id}">Открыть участки</button>
+                            <button class="btn-secondary edit-production-btn" data-id="${prod.id}">Редактировать</button>
+                            <button class="btn-secondary btn-danger delete-production-btn" data-id="${prod.id}">Удалить</button>
                         </div>
-                    `).join('')}
-                </div>
+                    </div>
+                `).join('')}
             </div>
         `;
         
         document.getElementById('createProductionBtn').addEventListener('click', showCreateProductionModal);
+        document.getElementById('exportDataBtn').addEventListener('click', exportData);
+        document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
+        const fileInput = document.getElementById('importFileInput');
+        fileInput.addEventListener('change', importData);
+        
         document.querySelectorAll('.open-site-btn').forEach(btn => {
             btn.addEventListener('click', () => renderSitesPage(btn.getAttribute('data-id')));
         });
@@ -406,7 +381,11 @@
         });
         document.querySelectorAll('.delete-production-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (confirm('Удалить производство?')) deleteProduction(btn.getAttribute('data-id'));
+                if (confirm('Удалить производство?')) {
+                    productions = productions.filter(p => p.id !== btn.getAttribute('data-id'));
+                    saveData();
+                    renderMainPage();
+                }
             });
         });
     }
@@ -429,10 +408,18 @@
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modal = document.getElementById('productionModal');
+        
         document.getElementById('saveProductionBtn').addEventListener('click', () => {
             const name = document.getElementById('prodName').value.trim();
             if (!name) { alert('Введите название'); return; }
-            createProduction({ name, activity: document.getElementById('prodActivity').value.trim() || 'Не указано' });
+            productions.push({
+                id: generateId(),
+                name: name,
+                activity: document.getElementById('prodActivity').value.trim() || 'Не указано',
+                sites: []
+            });
+            saveData();
+            renderMainPage();
             modal.remove();
         });
         document.getElementById('cancelModalBtn').addEventListener('click', () => modal.remove());
@@ -458,9 +445,12 @@
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modal = document.getElementById('editProdModal');
+        
         document.getElementById('updateProductionBtn').addEventListener('click', () => {
-            const newName = document.getElementById('editProdName').value.trim();
-            updateProduction(id, { name: newName, activity: document.getElementById('editProdActivity').value.trim() || 'Не указано' });
+            prod.name = document.getElementById('editProdName').value.trim() || prod.name;
+            prod.activity = document.getElementById('editProdActivity').value.trim() || 'Не указано';
+            saveData();
+            renderMainPage();
             modal.remove();
         });
         document.getElementById('cancelEditBtn').addEventListener('click', () => modal.remove());
@@ -471,17 +461,17 @@
         const prod = productions.find(p => p.id === prodId);
         if (!prod) { renderMainPage(); return; }
         
-        const app = document.getElementById('app');
-        app.innerHTML = `
+        const container = document.getElementById('dynamicContent');
+        container.innerHTML = `
             <div class="site-page">
                 <a class="back-link" id="backToMain">← На главную</a>
                 <h2>Производство: ${escapeHtml(prod.name)}</h2>
                 <p>${escapeHtml(prod.activity)}</p>
                 <div class="section">
                     <div class="section-title">Участки</div>
-                    <button class="btn-primary" id="addSiteFromTemplateBtn">+ Добавить участок из шаблона</button>
+                    <button class="btn-primary" id="addSiteBtn">+ Добавить участок из шаблона</button>
                     <div id="sitesList" style="margin-top:20px;">
-                        ${prod.sites.length === 0 ? '<p>Нет участков. Создайте первый участок из шаблона.</p>' : ''}
+                        ${prod.sites.length === 0 ? '<p>Нет участков. Создайте первый участок.</p>' : ''}
                         ${prod.sites.map(site => `
                             <div style="border:1px solid #ddd; margin:15px 0; padding:15px; border-radius:6px;">
                                 <h3>${escapeHtml(site.name)}</h3>
@@ -500,14 +490,18 @@
         `;
         
         document.getElementById('backToMain').addEventListener('click', () => renderMainPage());
-        document.getElementById('addSiteFromTemplateBtn').addEventListener('click', () => showTemplateSelectionModal(prodId));
+        document.getElementById('addSiteBtn').addEventListener('click', () => showTemplateSelectionModal(prodId));
         
         document.querySelectorAll('.edit-site-btn').forEach(btn => {
             btn.addEventListener('click', () => showEditSiteModal(prodId, btn.getAttribute('data-siteid')));
         });
         document.querySelectorAll('.delete-site-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (confirm('Удалить участок?')) deleteSite(prodId, btn.getAttribute('data-siteid'));
+                if (confirm('Удалить участок?')) {
+                    prod.sites = prod.sites.filter(s => s.id !== btn.getAttribute('data-siteid'));
+                    saveData();
+                    renderSitesPage(prodId);
+                }
             });
         });
         document.querySelectorAll('.open-site-detail-btn').forEach(btn => {
@@ -516,14 +510,14 @@
     }
     
     function showTemplateSelectionModal(prodId) {
-        let selectedTemplateId = templates[0]?.id || null;
+        let selectedTemplateId = SITE_TEMPLATES[0].id;
         
         const modalHtml = `
             <div id="templateModal" class="modal" style="display:flex;">
                 <div class="modal-content">
                     <h3>Выберите шаблон участка</h3>
                     <div class="templates-grid" id="templatesGrid">
-                        ${templates.map(t => `
+                        ${SITE_TEMPLATES.map(t => `
                             <div class="template-card" data-id="${t.id}">
                                 <h4>${escapeHtml(t.name)}</h4>
                                 <p>Тип: ${escapeHtml(t.type)}</p>
@@ -549,22 +543,18 @@
         });
         
         document.getElementById('nextStepBtn').addEventListener('click', () => {
-            if (selectedTemplateId) {
-                modal.remove();
-                showCustomizeSiteModal(prodId, selectedTemplateId);
-            } else {
-                alert('Выберите шаблон');
-            }
+            modal.remove();
+            showCustomizeSiteModal(prodId, selectedTemplateId);
         });
         document.getElementById('cancelTemplateBtn').addEventListener('click', () => modal.remove());
     }
     
     function showCustomizeSiteModal(prodId, templateId) {
-        const template = templates.find(t => t.id === templateId);
+        const template = SITE_TEMPLATES.find(t => t.id === templateId);
         if (!template) return;
         
-        let parts = template.defaultParts.map(p => ({ ...p, id: Date.now() + Math.random() }));
-        let tasks = template.defaultTasks.map(t => ({ ...t, id: Date.now() + Math.random() }));
+        let parts = template.defaultParts.map(p => ({ ...p, id: generateId() }));
+        let tasks = template.defaultTasks.map(t => ({ ...t, id: generateId() }));
         
         function renderCustomizeModal() {
             const modalHtml = `
@@ -616,7 +606,6 @@
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             const modal = document.getElementById('customizeModal');
             
-            // Обработчики для деталей
             document.querySelectorAll('[data-part-index]').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(input.getAttribute('data-part-index'));
@@ -650,12 +639,12 @@
             });
             
             document.getElementById('addPartBtn').addEventListener('click', () => {
-                parts.push({ name: 'Новая деталь', description: 'Описание', id: Date.now() + Math.random() });
+                parts.push({ name: 'Новая деталь', description: 'Описание', id: generateId() });
                 renderCustomizeModal();
             });
             
             document.getElementById('addTaskBtn').addEventListener('click', () => {
-                tasks.push({ title: 'Новая задача', description: 'Описание', status: 'Ожидает', id: Date.now() + Math.random() });
+                tasks.push({ title: 'Новая задача', description: 'Описание', status: 'Ожидает', id: generateId() });
                 renderCustomizeModal();
             });
             
@@ -670,7 +659,19 @@
                     alert('Введите имя участка');
                     return;
                 }
-                createSiteFromTemplate(prodId, templateId, siteName, parts, tasks);
+                
+                const prod = productions.find(p => p.id === prodId);
+                if (prod) {
+                    prod.sites.push({
+                        id: generateId(),
+                        name: siteName,
+                        type: template.type,
+                        parts: parts,
+                        tasks: tasks
+                    });
+                    saveData();
+                    renderSitesPage(prodId);
+                }
                 modal.remove();
             });
         }
@@ -702,9 +703,10 @@
         const modal = document.getElementById('editSiteModal');
         
         document.getElementById('updateSiteBtn').addEventListener('click', () => {
-            const newName = document.getElementById('editSiteName').value.trim();
-            const newType = document.getElementById('editSiteType').value.trim();
-            updateSite(prodId, siteId, { name: newName, type: newType });
+            site.name = document.getElementById('editSiteName').value.trim() || site.name;
+            site.type = document.getElementById('editSiteType').value.trim() || site.type;
+            saveData();
+            renderSitesPage(prodId);
             modal.remove();
         });
         document.getElementById('cancelEditSiteBtn').addEventListener('click', () => modal.remove());
@@ -715,14 +717,14 @@
         const site = prod?.sites.find(s => s.id === siteId);
         if (!site) { renderSitesPage(prodId); return; }
         
-        const app = document.getElementById('app');
-        app.innerHTML = `
+        const container = document.getElementById('dynamicContent');
+        container.innerHTML = `
             <div class="site-page">
                 <a class="back-link" id="backToSites">← К списку участков</a>
                 <h2>Участок: ${escapeHtml(site.name)} (${escapeHtml(site.type)})</h2>
                 <div class="section">
                     <div class="section-title">Детали</div>
-                    <ul class="parts-list">
+                    <ul class="parts-list" id="partsList">
                         ${site.parts.map(part => `
                             <li>
                                 <span><strong>${escapeHtml(part.name)}</strong>: ${escapeHtml(part.description)}</span>
@@ -732,13 +734,12 @@
                                 </div>
                             </li>
                         `).join('')}
-                        ${site.parts.length === 0 ? '<li>Нет деталей</li>' : ''}
                     </ul>
                     <button class="btn-secondary" id="addPartBtn">+ Добавить деталь</button>
                 </div>
                 <div class="section">
                     <div class="section-title">Задачи</div>
-                    <ul class="tasks-list">
+                    <ul class="tasks-list" id="tasksList">
                         ${site.tasks.map(task => `
                             <li>
                                 <span><strong>${escapeHtml(task.title)}</strong>: ${escapeHtml(task.description)} <span class="status-badge">${escapeHtml(task.status)}</span></span>
@@ -748,22 +749,28 @@
                                 </div>
                             </li>
                         `).join('')}
-                        ${site.tasks.length === 0 ? '<li>Нет задач</li>' : ''}
                     </ul>
                     <button class="btn-secondary" id="addTaskBtn">+ Добавить задачу</button>
+                </div>
+                <div style="margin-top:20px;">
+                    <button class="btn-success" id="finalizeBtn">Сформировать</button>
                 </div>
             </div>
         `;
         
         document.getElementById('backToSites').addEventListener('click', () => renderSitesPage(prodId));
+        document.getElementById('finalizeBtn').addEventListener('click', () => {
+            alert(`Участок "${site.name}" сформирован`);
+            renderSitesPage(prodId);
+        });
         
         document.getElementById('addPartBtn').addEventListener('click', () => {
             const name = prompt('Название детали:');
             if (name) {
                 const description = prompt('Описание:');
-                const newPart = { id: Date.now() + Math.random(), name, description: description || '' };
-                site.parts.push(newPart);
-                updateSite(prodId, siteId, { parts: site.parts });
+                site.parts.push({ id: generateId(), name, description: description || '' });
+                saveData();
+                renderSiteDetailPage(prodId, siteId);
             }
         });
         
@@ -771,9 +778,9 @@
             const title = prompt('Заголовок задачи:');
             if (title) {
                 const description = prompt('Описание:');
-                const newTask = { id: Date.now() + Math.random(), title, description: description || '', status: 'Ожидает' };
-                site.tasks.push(newTask);
-                updateSite(prodId, siteId, { tasks: site.tasks });
+                site.tasks.push({ id: generateId(), title, description: description || '', status: 'Ожидает' });
+                saveData();
+                renderSiteDetailPage(prodId, siteId);
             }
         });
         
@@ -785,9 +792,9 @@
                     const newName = prompt('Новое название:', part.name);
                     if (newName) {
                         part.name = newName;
-                        const newDesc = prompt('Новое описание:', part.description);
-                        part.description = newDesc || '';
-                        updateSite(prodId, siteId, { parts: site.parts });
+                        part.description = prompt('Новое описание:', part.description) || '';
+                        saveData();
+                        renderSiteDetailPage(prodId, siteId);
                     }
                 }
             });
@@ -798,7 +805,8 @@
                 if (confirm('Удалить деталь?')) {
                     const partId = btn.getAttribute('data-partid');
                     site.parts = site.parts.filter(p => p.id !== partId);
-                    updateSite(prodId, siteId, { parts: site.parts });
+                    saveData();
+                    renderSiteDetailPage(prodId, siteId);
                 }
             });
         });
@@ -811,11 +819,11 @@
                     const newTitle = prompt('Новый заголовок:', task.title);
                     if (newTitle) {
                         task.title = newTitle;
-                        const newDesc = prompt('Новое описание:', task.description);
-                        task.description = newDesc || '';
+                        task.description = prompt('Новое описание:', task.description) || '';
                         const newStatus = prompt('Статус (Ожидает/В работе/Выполнено):', task.status);
                         if (newStatus) task.status = newStatus;
-                        updateSite(prodId, siteId, { tasks: site.tasks });
+                        saveData();
+                        renderSiteDetailPage(prodId, siteId);
                     }
                 }
             });
@@ -826,13 +834,57 @@
                 if (confirm('Удалить задачу?')) {
                     const taskId = btn.getAttribute('data-taskid');
                     site.tasks = site.tasks.filter(t => t.id !== taskId);
-                    updateSite(prodId, siteId, { tasks: site.tasks });
+                    saveData();
+                    renderSiteDetailPage(prodId, siteId);
                 }
             });
         });
     }
     
-    init();
+    function exportData() {
+        const dataStr = JSON.stringify(productions, null, 2);
+        const blob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'productions_backup.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (Array.isArray(imported)) {
+                    productions = imported;
+                    saveData();
+                    renderMainPage();
+                    alert('Импорт успешен');
+                } else {
+                    alert('Неверный формат');
+                }
+            } catch(err) {
+                alert('Ошибка импорта');
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+    
+    function clearAllData() {
+        if (confirm('Удалить ВСЕ данные?')) {
+            productions = [];
+            saveData();
+            renderMainPage();
+        }
+    }
+    
+    // Запуск
+    loadData();
 </script>
 </body>
 </html>
